@@ -1,0 +1,68 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent } from "@/components/ui/card";
+import { Shield, Lock, ArrowLeft } from "lucide-react";
+
+export default function UnauthorizedPage() {
+  const router = useRouter();
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        <Card className="shadow-xl border-0 bg-white">
+          <CardContent className="p-8 text-center">
+            {/* Error Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="p-4 bg-red-100 rounded-full">
+                <Lock className="h-12 w-12 text-red-600" />
+              </div>
+            </div>
+
+            {/* Logo */}
+            <div className="flex justify-center mb-6">
+              <div className="p-3 bg-gradient-to-r from-red-600 to-orange-600 rounded-full">
+                <Shield className="h-8 w-8 text-white" />
+              </div>
+            </div>
+
+            {/* Message */}
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              Access Denied
+            </h1>
+
+            <p className="text-gray-600 mb-6">
+              You don&apos;t have permission to access this page. Please contact
+              your administrator if you think this is an error.
+            </p>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Go to Dashboard
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="w-full h-12 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
