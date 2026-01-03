@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -29,67 +29,47 @@ import {
   Plus,
   Download,
   Edit,
-  Trash2,
   Eye,
   FileText,
   DollarSign,
-  Calendar,
   CheckCircle,
-  Clock,
   AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
-
-// Mock data for billing
-const mockBills = [
-  {
-    id: "1",
-    invoice_number: "INV-001",
-    customer_name: "Acme Corporation",
-    customer_email: "billing@acme.com",
-    issue_date: "2024-01-15",
-    due_date: "2024-02-15",
-    total_amount: 12500,
-    status: "paid",
-    payment_date: "2024-01-20",
-    items_count: 8,
-  },
-  {
-    id: "2",
-    invoice_number: "INV-002",
-    customer_name: "Tech Solutions",
-    customer_email: "accounts@techsolutions.com",
-    issue_date: "2024-01-14",
-    due_date: "2024-02-14",
-    total_amount: 8500,
-    status: "pending",
-    payment_date: null,
-    items_count: 5,
-  },
-  {
-    id: "3",
-    invoice_number: "INV-003",
-    customer_name: "Global Industries",
-    customer_email: "finance@global.com",
-    issue_date: "2024-01-10",
-    due_date: "2024-02-10",
-    total_amount: 22000,
-    status: "overdue",
-    payment_date: null,
-    items_count: 12,
-  },
-];
+import { BillingRepository } from "@/repositories/billingRepository";
+import { BillingInvoice } from "@/types";
 
 export default function BillingPage() {
-  const [bills] = useState(mockBills);
+  const [bills, setBills] = useState<BillingInvoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Fetch real-time data from database
+  useEffect(() => {
+    const fetchBills = async () => {
+      try {
+        setLoading(true);
+        const data = await BillingRepository.getAllInvoices();
+        setBills(data);
+        setError(null);
+      } catch (error) {
+        console.error("Failed to fetch bills:", error);
+        setError("Failed to load billing data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBills();
+  }, []);
 
   const filteredBills = bills.filter((bill) => {
     const matchesSearch =
       searchTerm === "" ||
       bill.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      bill.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
+      bill.client_name.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
       filterStatus === "all" || bill.status === filterStatus;
@@ -97,75 +77,50 @@ export default function BillingPage() {
     return matchesSearch && matchesStatus;
   });
 
+  // Calculate statistics
+  const totalBills = bills.length;
+  const paidBills = bills.filter(
+    (bill) => bill.payment_status === "paid"
+  ).length;
+  const overdueBills = bills.filter((bill) => bill.status === "overdue").length;
+  const totalRevenue = bills
+    .filter((bill) => bill.payment_status === "paid")
+    .reduce((sum, bill) => sum + bill.total_amount, 0);
+
   const exportCSV = () => {
     const csvData = [
       [
         "Invoice Number",
-        "Customer",
-        "Issue Date",
+        "Client Name",
+        "Invoice Date",
         "Due Date",
         "Total Amount",
+        "Payment Status",
         "Status",
-        "Payment Date",
       ],
       ...filteredBills.map((bill) => [
         bill.invoice_number,
-        bill.customer_name,
-        bill.issue_date,
+        bill.client_name,
+        bill.invoice_date,
         bill.due_date,
         bill.total_amount.toString(),
+        bill.payment_status,
         bill.status,
-        bill.payment_date || "Not Paid",
       ]),
     ];
 
-    const csv = csvData.map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const csvContent = csvData.map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "billing-export.csv";
+    a.download = "billing_invoices.csv";
     a.click();
-  };
-
-  const totalBills = filteredBills.length;
-  const paidBills = filteredBills.filter((b) => b.status === "paid").length;
-  const overdueBills = filteredBills.filter(
-    (b) => b.status === "overdue"
-  ).length;
-  const totalRevenue = filteredBills.reduce(
-    (sum, bill) => sum + (bill.status === "paid" ? bill.total_amount : 0),
-    0
-  );
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "paid":
-        return "bg-green-100 text-green-800";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "overdue":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-900";
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "paid":
-        return <CheckCircle className="w-3 h-3 mr-1" />;
-      case "pending":
-        return <Clock className="w-3 h-3 mr-1" />;
-      case "overdue":
-        return <AlertTriangle className="w-3 h-3 mr-1" />;
-      default:
-        return null;
-    }
+    window.URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold text-gray-900">Billing & Invoices</h2>
         <div className="flex space-x-2">
@@ -250,99 +205,129 @@ export default function BillingPage() {
                   <SelectItem value="paid">Paid</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice Number</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Issue Date</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Total Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Payment Date</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBills.map((bill) => (
-                <TableRow key={bill.id}>
-                  <TableCell className="font-medium">
-                    {bill.invoice_number}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    <div>
-                      <div className="font-medium">{bill.customer_name}</div>
-                      <div className="text-sm text-gray-500">
-                        {bill.customer_email}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {bill.issue_date}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {bill.due_date}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    ${bill.total_amount.toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                        bill.status
-                      )}`}
-                    >
-                      {getStatusIcon(bill.status)}
-                      {bill.status.charAt(0).toUpperCase() +
-                        bill.status.slice(1)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {bill.payment_date || "Not Paid"}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {bill.items_count}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Link href={`/billing/view/${bill.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Link href={`/billing/edit/${bill.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="cursor-pointer"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-gray-600">Loading invoices...</span>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <div className="text-red-600 mb-2">{error}</div>
+              <Button
+                onClick={() => window.location.reload()}
+                className="cursor-pointer"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice Number</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Invoice Date</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead>Total Amount</TableHead>
+                  <TableHead>Payment Status</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredBills.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <div className="text-gray-500">
+                        {searchTerm || filterStatus !== "all"
+                          ? "No invoices found matching your criteria"
+                          : "No invoices found. Create your first invoice!"}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredBills.map((bill) => (
+                    <TableRow key={bill.id}>
+                      <TableCell className="font-medium">
+                        {bill.invoice_number}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{bill.client_name}</div>
+                          <div className="text-sm text-gray-500">
+                            {bill.client_email}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{bill.invoice_date}</TableCell>
+                      <TableCell>{bill.due_date}</TableCell>
+                      <TableCell className="font-medium">
+                        ${bill.total_amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            bill.payment_status === "paid"
+                              ? "bg-green-100 text-green-800"
+                              : bill.payment_status === "partial"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {bill.payment_status}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            bill.status === "paid"
+                              ? "bg-green-100 text-green-800"
+                              : bill.status === "sent"
+                              ? "bg-blue-100 text-blue-800"
+                              : bill.status === "overdue"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {bill.status}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Link href={`/billing/view/${bill.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="cursor-pointer"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Link href={`/billing/edit/${bill.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="cursor-pointer"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -103,6 +103,70 @@ export interface LeaveRequest {
   updated_by?: string;
 }
 
+export interface BillingInvoice {
+  id: string;
+  invoice_number: string;
+  client_id: string;
+  client_name: string;
+  client_email?: string;
+  client_phone?: string;
+  client_address?: string;
+  client_gst_number?: string;
+  invoice_date: string;
+  due_date: string;
+  status: string;
+  payment_method?: string;
+  payment_status: string;
+  subtotal: number;
+  discount_amount: number;
+  discount_percentage: number;
+  tax_amount: number;
+  tax_percentage: number;
+  shipping_charges: number;
+  other_charges: number;
+  total_amount: number;
+  amount_paid: number;
+  balance_due: number;
+  notes?: string;
+  terms_conditions?: string;
+  internal_notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface BillingItem {
+  id: string;
+  invoice_id: string;
+  item_name: string;
+  item_description?: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  discount_amount: number;
+  discount_percentage: number;
+  tax_amount: number;
+  tax_percentage: number;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BillingPayment {
+  id: string;
+  invoice_id: string;
+  payment_date: string;
+  payment_method: string;
+  amount: number;
+  transaction_id?: string;
+  payment_status: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
