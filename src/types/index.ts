@@ -11,6 +11,98 @@ export interface User {
   is_active: boolean;
 }
 
+export interface Employee {
+  id: string;
+  employee_code: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  position: string;
+  department: string;
+  hire_date: string;
+  salary: number;
+  bank_account?: string;
+  is_active: boolean;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  date_of_birth?: string;
+  gender?: string;
+  blood_group?: string;
+  marital_status?: string;
+  nationality?: string;
+  pan_card?: string;
+  aadhaar_card?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface SalaryPayment {
+  id: string;
+  employee_id: string;
+  payment_month: string;
+  basic_salary: number;
+  hra: number;
+  da: number;
+  ta: number;
+  other_allowances: number;
+  gross_salary: number;
+  pf_deduction: number;
+  esi_deduction: number;
+  professional_tax: number;
+  income_tax: number;
+  other_deductions: number;
+  total_deductions: number;
+  net_salary: number;
+  payment_date?: string;
+  payment_method: string;
+  payment_status: string;
+  transaction_id?: string;
+  remarks?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface Attendance {
+  id: string;
+  employee_id: string;
+  attendance_date: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  total_hours?: number;
+  overtime_hours: number;
+  status: string;
+  leave_type?: string;
+  remarks?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  employee_id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  reason?: string;
+  status: string;
+  approved_by?: string;
+  approved_date?: string;
+  remarks?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -108,6 +200,74 @@ export interface Inventory {
   coil_grade?: string;
   coil_resistance?: number;
   coil_insulation?: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+
+  // Supplier Information
+  supplier_name: string;
+  supplier_email?: string;
+  supplier_phone?: string;
+  supplier_address?: string;
+  supplier_contact_person?: string;
+
+  // Order Information
+  order_number: string;
+  order_date: string;
+  expected_delivery_date?: string;
+  actual_delivery_date?: string;
+
+  // Product Information
+  product_name: string;
+  product_category?: string;
+  product_description?: string;
+  quantity_ordered: number;
+  quantity_received: number;
+  unit: string;
+  unit_price: number;
+
+  // Financial Information
+  total_amount: number;
+  tax_amount: number;
+  shipping_cost: number;
+  discount_amount: number;
+  final_amount: number;
+
+  // Payment Information
+  payment_status: "pending" | "partial" | "paid" | "overdue";
+  payment_method?: string;
+  payment_due_date?: string;
+  amount_paid: number;
+
+  // Order Status
+  order_status:
+    | "pending"
+    | "confirmed"
+    | "shipped"
+    | "delivered"
+    | "cancelled"
+    | "partial_delivered";
+
+  // Additional Information
+  invoice_number?: string;
+  tracking_number?: string;
+  shipping_address?: string;
+  billing_address?: string;
+  notes?: string;
+  internal_notes?: string;
+  terms_conditions?: string;
+  reference_number?: string;
+
+  // Quality Control
+  quality_status: "pending" | "approved" | "rejected" | "inspected";
+  quality_notes?: string;
+
+  // Metadata
+  created_by: string;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Sale {

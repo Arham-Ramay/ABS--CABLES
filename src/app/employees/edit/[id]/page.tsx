@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -18,8 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   ArrowLeft,
   Save,
@@ -27,98 +26,149 @@ import {
   DollarSign,
   Calendar,
   Phone,
-  Mail,
-  MapPin,
   FileText,
   CreditCard,
   Users,
+  MapPin,
 } from "lucide-react";
+import Link from "next/link";
 import { EmployeeRepository } from "@/repositories/employeeRepository";
 import { Employee } from "@/types";
 
-export default function EmployeeCreatePage() {
+export default function EmployeeEditPage() {
+  const params = useParams();
   const router = useRouter();
+  const employeeId = params.id as string;
 
-  const [formData, setFormData] = useState({
-    employee_code: "",
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    address: "",
-    position: "",
-    department: "",
-    hire_date: new Date().toISOString().split("T")[0],
-    salary: 0,
-    bank_account: "",
-    is_active: true,
-    emergency_contact_name: "",
-    emergency_contact_phone: "",
-    date_of_birth: "",
-    gender: "",
-    blood_group: "",
-    marital_status: "",
-    nationality: "Indian",
-    pan_card: "",
-    aadhaar_card: "",
-  });
-
-  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState<Employee | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-generate employee code
+  // Fetch employee data on component mount
   useEffect(() => {
-    const generateEmployeeCode = () => {
-      const date = new Date();
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const random = Math.floor(Math.random() * 1000)
-        .toString()
-        .padStart(3, "0");
-      return `EMP-${year}${month}-${random}`;
+    const fetchEmployee = async () => {
+      try {
+        const employee = await EmployeeRepository.getById(employeeId);
+        if (employee) {
+          setFormData(employee);
+        } else {
+          setError("Employee not found");
+        }
+      } catch (error) {
+        console.error("Failed to fetch employee:", error);
+        setError("Failed to load employee");
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setFormData((prev) => ({
-      ...prev,
-      employee_code: generateEmployeeCode(),
-    }));
-  }, []);
+    fetchEmployee();
+  }, [employeeId]);
 
+  // Calculate salary components when salary changes
+  const calculateSalaryComponents = (baseSalary: number) => {
+    const hra = baseSalary * 0.3; // 30% of basic
+    const da = baseSalary * 0.1; // 10% of basic
+    const ta = baseSalary * 0.05; // 5% of basic
+    const other_allowances = baseSalary * 0.015; // 1.5% of basic
+    const gross_salary = baseSalary + hra + da + ta + other_allowances;
+
+    const pf_deduction = Math.min(baseSalary * 0.12, 1800); // 12% of basic, max 1800
+    const esi_deduction = Math.min(gross_salary * 0.0075, 500); // 0.75% of gross, max 500
+    const professional_tax = 200; // Fixed
+    const income_tax = gross_salary * 0.05; // Simplified 5%
+    const total_deductions =
+      pf_deduction + esi_deduction + professional_tax + income_tax;
+    const net_salary = gross_salary - total_deductions;
+
+    return {
+      basic_salary: baseSalary,
+      hra,
+      da,
+      ta,
+      other_allowances,
+      gross_salary,
+      pf_deduction,
+      esi_deduction,
+      professional_tax,
+      income_tax,
+      total_deductions,
+      net_salary,
+    };
+  };
+
+  // Update salary components when salary changes
   const handleInputChange = (
-    field: string,
+    field: keyof Employee,
     value: string | number | boolean
   ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    if (!formData) return;
+
+    const updatedData = { ...formData, [field]: value };
+
+    // Recalculate salary components if salary changed
+    if (field === "salary") {
+      const salaryComponents = calculateSalaryComponents(Number(value));
+      setFormData({ ...updatedData, ...salaryComponents });
+    } else {
+      setFormData(updatedData);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    if (!formData) return;
+
+    setSaving(true);
     setError(null);
 
     try {
-      // Prepare data for submission
-      const submissionData = {
+      // Prepare data for update
+      const updateData = {
         ...formData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        created_by: "Admin",
         updated_by: "Admin",
+        updated_at: new Date().toISOString(),
       };
 
-      await EmployeeRepository.create(submissionData as Omit<Employee, "id">);
-      alert("Employee created successfully!");
+      await EmployeeRepository.update(employeeId, updateData);
+      alert("Employee updated successfully!");
       router.push("/employees");
     } catch (error) {
-      console.error("Failed to create employee:", error);
-      setError("Failed to create employee. Please try again.");
+      console.error("Failed to update employee:", error);
+      setError("Failed to update employee. Please try again.");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading employee data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !formData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">{error || "Employee not found"}</p>
+            <Link href="/employees">
+              <Button variant="outline">Back to Employees</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
@@ -135,11 +185,9 @@ export default function EmployeeCreatePage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-4xl font-bold text-gray-900">
-            Create New Employee
-          </h1>
+          <h1 className="text-4xl font-bold text-gray-900">Edit Employee</h1>
           <p className="text-gray-600 mt-2">
-            Add a new employee to the system with salary tracking
+            Update employee {formData.employee_code} information
           </p>
         </div>
       </div>
@@ -152,7 +200,7 @@ export default function EmployeeCreatePage() {
             Employee Information
           </CardTitle>
           <CardDescription className="text-blue-100">
-            Enter the details for the new employee
+            Update the employee details and salary information
           </CardDescription>
         </CardHeader>
         <CardContent className="p-8">
@@ -179,7 +227,7 @@ export default function EmployeeCreatePage() {
                     onChange={(e) =>
                       handleInputChange("employee_code", e.target.value)
                     }
-                    placeholder="Auto-generated"
+                    placeholder="Employee code"
                     required
                     className="h-12 text-lg border-blue-200 focus:border-blue-500"
                   />
@@ -218,7 +266,7 @@ export default function EmployeeCreatePage() {
                   </label>
                   <Input
                     type="email"
-                    value={formData.email}
+                    value={formData.email || ""}
                     onChange={(e) => handleInputChange("email", e.target.value)}
                     placeholder="employee@example.com"
                     className="h-12 text-lg border-blue-200 focus:border-blue-500"
@@ -229,7 +277,7 @@ export default function EmployeeCreatePage() {
                     Phone
                   </label>
                   <Input
-                    value={formData.phone}
+                    value={formData.phone || ""}
                     onChange={(e) => handleInputChange("phone", e.target.value)}
                     placeholder="+1234567890"
                     className="h-12 text-lg border-blue-200 focus:border-blue-500"
@@ -241,7 +289,7 @@ export default function EmployeeCreatePage() {
                   </label>
                   <Input
                     type="date"
-                    value={formData.date_of_birth}
+                    value={formData.date_of_birth || ""}
                     onChange={(e) =>
                       handleInputChange("date_of_birth", e.target.value)
                     }
@@ -256,7 +304,7 @@ export default function EmployeeCreatePage() {
                     Gender
                   </label>
                   <Select
-                    value={formData.gender}
+                    value={formData.gender || ""}
                     onValueChange={(value) =>
                       handleInputChange("gender", value)
                     }
@@ -276,7 +324,7 @@ export default function EmployeeCreatePage() {
                     Blood Group
                   </label>
                   <Select
-                    value={formData.blood_group}
+                    value={formData.blood_group || ""}
                     onValueChange={(value) =>
                       handleInputChange("blood_group", value)
                     }
@@ -301,7 +349,7 @@ export default function EmployeeCreatePage() {
                     Marital Status
                   </label>
                   <Select
-                    value={formData.marital_status}
+                    value={formData.marital_status || ""}
                     onValueChange={(value) =>
                       handleInputChange("marital_status", value)
                     }
@@ -322,7 +370,7 @@ export default function EmployeeCreatePage() {
                     Nationality
                   </label>
                   <Input
-                    value={formData.nationality}
+                    value={formData.nationality || ""}
                     onChange={(e) =>
                       handleInputChange("nationality", e.target.value)
                     }
@@ -337,7 +385,7 @@ export default function EmployeeCreatePage() {
                   Address
                 </label>
                 <Textarea
-                  value={formData.address}
+                  value={formData.address || ""}
                   onChange={(e) => handleInputChange("address", e.target.value)}
                   placeholder="Enter complete address"
                   rows={3}
@@ -438,35 +486,77 @@ export default function EmployeeCreatePage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-blue-700 mb-2">
-                    Bank Account Number
+                    Bank Account
                   </label>
                   <Input
-                    value={formData.bank_account}
+                    value={formData.bank_account || ""}
                     onChange={(e) =>
                       handleInputChange("bank_account", e.target.value)
                     }
-                    placeholder="Bank account for salary transfer"
+                    placeholder="Bank account for salary"
                     className="h-12 text-lg border-blue-200 focus:border-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-blue-700 mb-2">
-                    Status
+                    Payment Status
                   </label>
                   <Select
-                    value={formData.is_active.toString()}
+                    value={formData.payment_status || "pending"}
                     onValueChange={(value) =>
-                      handleInputChange("is_active", value === "true")
+                      handleInputChange("payment_status", value)
                     }
                   >
                     <SelectTrigger className="h-12 text-lg border-blue-200 focus:border-blue-500">
-                      <SelectValue />
+                      <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="true">Active</SelectItem>
-                      <SelectItem value="false">Inactive</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-blue-50 p-6 rounded-lg">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Basic Salary
+                  </label>
+                  <div className="text-lg font-bold text-blue-900">
+                    $
+                    {formData.basic_salary?.toFixed(2) ||
+                      formData.salary.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Gross Salary
+                  </label>
+                  <div className="text-lg font-bold text-blue-900">
+                    $
+                    {formData.gross_salary?.toFixed(2) ||
+                      formData.salary.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Total Deductions
+                  </label>
+                  <div className="text-lg font-bold text-red-600">
+                    ${formData.total_deductions?.toFixed(2) || "0.00"}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Net Salary
+                  </label>
+                  <div className="text-lg font-bold text-green-600">
+                    $
+                    {formData.net_salary?.toFixed(2) ||
+                      formData.salary.toFixed(2)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -483,7 +573,7 @@ export default function EmployeeCreatePage() {
                     Emergency Contact Name
                   </label>
                   <Input
-                    value={formData.emergency_contact_name}
+                    value={formData.emergency_contact_name || ""}
                     onChange={(e) =>
                       handleInputChange(
                         "emergency_contact_name",
@@ -499,7 +589,7 @@ export default function EmployeeCreatePage() {
                     Emergency Contact Phone
                   </label>
                   <Input
-                    value={formData.emergency_contact_phone}
+                    value={formData.emergency_contact_phone || ""}
                     onChange={(e) =>
                       handleInputChange(
                         "emergency_contact_phone",
@@ -525,7 +615,7 @@ export default function EmployeeCreatePage() {
                     PAN Card Number
                   </label>
                   <Input
-                    value={formData.pan_card}
+                    value={formData.pan_card || ""}
                     onChange={(e) =>
                       handleInputChange("pan_card", e.target.value)
                     }
@@ -538,7 +628,7 @@ export default function EmployeeCreatePage() {
                     Aadhaar Card Number
                   </label>
                   <Input
-                    value={formData.aadhaar_card}
+                    value={formData.aadhaar_card || ""}
                     onChange={(e) =>
                       handleInputChange("aadhaar_card", e.target.value)
                     }
@@ -546,6 +636,47 @@ export default function EmployeeCreatePage() {
                     className="h-12 text-lg border-blue-200 focus:border-blue-500"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Additional Information */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-blue-900 border-b pb-3 flex items-center">
+                <MapPin className="w-5 h-5 mr-2" />
+                Additional Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Employee Status
+                  </label>
+                  <Select
+                    value={formData.is_active.toString()}
+                    onValueChange={(value) =>
+                      handleInputChange("is_active", value === "true")
+                    }
+                  >
+                    <SelectTrigger className="h-12 text-lg border-blue-200 focus:border-blue-500">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">Active</SelectItem>
+                      <SelectItem value="false">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-blue-700 mb-2">
+                  Notes
+                </label>
+                <Textarea
+                  value={formData.notes || ""}
+                  onChange={(e) => handleInputChange("notes", e.target.value)}
+                  placeholder="Additional notes about the employee"
+                  rows={3}
+                  className="border-blue-200 focus:border-blue-500"
+                />
               </div>
             </div>
 
@@ -560,18 +691,18 @@ export default function EmployeeCreatePage() {
               </div>
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={saving}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 text-lg cursor-pointer"
               >
-                {loading ? (
+                {saving ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Creating...
+                    Updating...
                   </>
                 ) : (
                   <>
                     <Save className="mr-2 h-5 w-5" />
-                    Create Employee
+                    Update Employee
                   </>
                 )}
               </Button>

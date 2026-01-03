@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -33,55 +33,33 @@ import {
   Eye,
   ShoppingCart,
   Package,
-  Calendar,
   DollarSign,
 } from "lucide-react";
 import Link from "next/link";
-
-// Mock data for purchases
-const mockPurchases = [
-  {
-    id: "1",
-    order_number: "PO-001",
-    supplier_name: "ABC Supplies",
-    supplier_email: "contact@abc.com",
-    order_date: "2024-01-15",
-    expected_delivery: "2024-01-20",
-    total_amount: 5000,
-    status: "pending",
-    payment_status: "unpaid",
-    items_count: 5,
-  },
-  {
-    id: "2",
-    order_number: "PO-002",
-    supplier_name: "XYZ Materials",
-    supplier_email: "info@xyz.com",
-    order_date: "2024-01-14",
-    expected_delivery: "2024-01-18",
-    total_amount: 3200,
-    status: "processing",
-    payment_status: "partial",
-    items_count: 3,
-  },
-  {
-    id: "3",
-    order_number: "PO-003",
-    supplier_name: "Global Components",
-    supplier_email: "sales@global.com",
-    order_date: "2024-01-13",
-    expected_delivery: "2024-01-17",
-    total_amount: 8500,
-    status: "delivered",
-    payment_status: "paid",
-    items_count: 8,
-  },
-];
+import { PurchaseRepository } from "@/repositories/purchaseRepository";
+import { PurchaseOrder } from "@/types";
 
 export default function PurchasePage() {
-  const [purchases] = useState(mockPurchases);
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Fetch purchase orders from database
+  useEffect(() => {
+    const fetchPurchases = async () => {
+      try {
+        const data = await PurchaseRepository.getAll();
+        setPurchases(data);
+      } catch (error) {
+        console.error("Failed to fetch purchase orders:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPurchases();
+  }, []);
 
   const filteredPurchases = purchases.filter((purchase) => {
     const matchesSearch =
@@ -90,7 +68,7 @@ export default function PurchasePage() {
       purchase.supplier_name.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
-      filterStatus === "all" || purchase.status === filterStatus;
+      filterStatus === "all" || purchase.order_status === filterStatus;
 
     return matchesSearch && matchesStatus;
   });
@@ -110,9 +88,9 @@ export default function PurchasePage() {
         purchase.order_number,
         purchase.supplier_name,
         purchase.order_date,
-        purchase.expected_delivery,
-        purchase.total_amount.toString(),
-        purchase.status,
+        purchase.expected_delivery_date || "",
+        purchase.final_amount.toString(),
+        purchase.order_status,
         purchase.payment_status,
       ]),
     ];
@@ -128,10 +106,10 @@ export default function PurchasePage() {
 
   const totalPurchases = filteredPurchases.length;
   const pendingPurchases = filteredPurchases.filter(
-    (p) => p.status === "pending"
+    (p) => p.order_status === "pending"
   ).length;
   const totalValue = filteredPurchases.reduce(
-    (sum, purchase) => sum + purchase.total_amount,
+    (sum, purchase) => sum + purchase.final_amount,
     0
   );
 
@@ -139,10 +117,16 @@ export default function PurchasePage() {
     switch (status) {
       case "pending":
         return "bg-yellow-100 text-yellow-800";
-      case "processing":
+      case "confirmed":
         return "bg-blue-100 text-blue-800";
+      case "shipped":
+        return "bg-purple-100 text-purple-800";
       case "delivered":
         return "bg-green-100 text-green-800";
+      case "cancelled":
+        return "bg-red-100 text-red-800";
+      case "partial_delivered":
+        return "bg-orange-100 text-orange-800";
       default:
         return "bg-gray-100 text-gray-900";
     }
@@ -150,12 +134,14 @@ export default function PurchasePage() {
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case "unpaid":
+      case "pending":
         return "bg-red-100 text-red-800";
       case "partial":
         return "bg-orange-100 text-orange-800";
       case "paid":
         return "bg-green-100 text-green-800";
+      case "overdue":
+        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-900";
     }
@@ -176,6 +162,7 @@ export default function PurchasePage() {
             variant="outline"
             onClick={exportCSV}
             className="cursor-pointer"
+            disabled={loading}
           >
             <Download className="w-4 h-4 mr-2" />
             Export CSV
@@ -183,166 +170,184 @@ export default function PurchasePage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Purchase Overview</CardTitle>
-          <CardDescription>Summary of purchase orders</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <ShoppingCart className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-blue-600">
-                {totalPurchases}
-              </div>
-              <div className="text-sm text-gray-900">Total Orders</div>
+      {loading ? (
+        <Card>
+          <CardContent className="p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading purchase orders...</p>
             </div>
-            <div className="text-center p-4 bg-yellow-50 rounded-lg">
-              <Package className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-yellow-600">
-                {pendingPurchases}
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Purchase Overview</CardTitle>
+              <CardDescription>Summary of purchase orders</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <ShoppingCart className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-blue-600">
+                    {totalPurchases}
+                  </div>
+                  <div className="text-sm text-gray-900">Total Orders</div>
+                </div>
+                <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                  <Package className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-yellow-600">
+                    {pendingPurchases}
+                  </div>
+                  <div className="text-sm text-gray-900">Pending Orders</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-green-600">
+                    ${totalValue.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-900">Total Value</div>
+                </div>
               </div>
-              <div className="text-sm text-gray-900">Pending Orders</div>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-green-600">
-                ${totalValue.toLocaleString()}
-              </div>
-              <div className="text-sm text-gray-900">Total Value</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Purchase Orders</CardTitle>
-              <CardDescription>
-                Manage purchase orders and supplier relationships
-              </CardDescription>
-            </div>
-            <div className="flex space-x-2">
-              <Input
-                placeholder="Search orders..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64"
-              />
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="delivered">Delivered</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Order Number</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Order Date</TableHead>
-                <TableHead>Expected Delivery</TableHead>
-                <TableHead>Total Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPurchases.map((purchase) => (
-                <TableRow key={purchase.id}>
-                  <TableCell className="font-medium">
-                    {purchase.order_number}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    <div>
-                      <div className="font-medium">
-                        {purchase.supplier_name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {purchase.supplier_email}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {purchase.order_date}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {purchase.expected_delivery}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    ${purchase.total_amount.toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                        purchase.status
-                      )}`}
-                    >
-                      {purchase.status.charAt(0).toUpperCase() +
-                        purchase.status.slice(1)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(
-                        purchase.payment_status
-                      )}`}
-                    >
-                      {purchase.payment_status.charAt(0).toUpperCase() +
-                        purchase.payment_status.slice(1)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {purchase.items_count}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Link href={`/purchase/view/${purchase.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="cursor-pointer"
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Purchase Orders</CardTitle>
+                  <CardDescription>
+                    Manage purchase orders and supplier relationships
+                  </CardDescription>
+                </div>
+                <div className="flex space-x-2">
+                  <Input
+                    placeholder="Search orders..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-64"
+                  />
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="confirmed">Confirmed</SelectItem>
+                      <SelectItem value="shipped">Shipped</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      <SelectItem value="partial_delivered">
+                        Partial Delivered
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order Number</TableHead>
+                    <TableHead>Supplier</TableHead>
+                    <TableHead>Order Date</TableHead>
+                    <TableHead>Expected Delivery</TableHead>
+                    <TableHead>Total Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredPurchases.map((purchase) => (
+                    <TableRow key={purchase.id}>
+                      <TableCell className="font-medium">
+                        {purchase.order_number}
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        <div>
+                          <div className="font-medium">
+                            {purchase.supplier_name}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {purchase.supplier_email}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        {purchase.order_date}
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        {purchase.expected_delivery_date || "Not set"}
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        ${purchase.final_amount.toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                            purchase.order_status
+                          )}`}
                         >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Link href={`/purchase/edit/${purchase.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="cursor-pointer"
+                          {purchase.order_status.charAt(0).toUpperCase() +
+                            purchase.order_status.slice(1).replace("_", " ")}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(
+                            purchase.payment_status
+                          )}`}
                         >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                          {purchase.payment_status.charAt(0).toUpperCase() +
+                            purchase.payment_status.slice(1)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        {purchase.quantity_ordered} {purchase.unit}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Link href={`/purchase/view/${purchase.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="cursor-pointer"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Link href={`/purchase/edit/${purchase.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="cursor-pointer"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

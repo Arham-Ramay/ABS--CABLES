@@ -1,21 +1,21 @@
 import { supabase } from "@/lib/database";
 import { TABLES } from "@/constants";
-import { Purchase } from "@/types";
+import { PurchaseOrder } from "@/types";
 
 export class PurchaseRepository {
   // Get all purchase orders
-  static async getAll(): Promise<Purchase[]> {
+  static async getAll(): Promise<PurchaseOrder[]> {
     const { data, error } = await supabase
       .from(TABLES.PURCHASE_ORDERS)
       .select("*")
-      .order("purchase_date", { ascending: false });
+      .order("order_date", { ascending: false });
 
     if (error) throw error;
     return data || [];
   }
 
   // Get purchase order by ID
-  static async getById(id: string): Promise<Purchase | null> {
+  static async getById(id: string): Promise<PurchaseOrder | null> {
     const { data, error } = await supabase
       .from(TABLES.PURCHASE_ORDERS)
       .select("*")
@@ -28,8 +28,8 @@ export class PurchaseRepository {
 
   // Create new purchase order
   static async create(
-    order: Omit<Purchase, "id" | "created_at" | "updated_at">
-  ): Promise<Purchase> {
+    order: Omit<PurchaseOrder, "id" | "created_at" | "updated_at">
+  ): Promise<PurchaseOrder> {
     const { data, error } = await supabase
       .from(TABLES.PURCHASE_ORDERS)
       .insert(order)
@@ -43,8 +43,8 @@ export class PurchaseRepository {
   // Update purchase order
   static async update(
     id: string,
-    updates: Partial<Purchase>
-  ): Promise<Purchase> {
+    updates: Partial<PurchaseOrder>
+  ): Promise<PurchaseOrder> {
     const { data, error } = await supabase
       .from(TABLES.PURCHASE_ORDERS)
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -66,75 +66,39 @@ export class PurchaseRepository {
     if (error) throw error;
   }
 
-  // Get purchase order by order number
-  static async getByOrderNumber(orderNumber: string): Promise<Purchase | null> {
-    const { data, error } = await supabase
-      .from(TABLES.PURCHASE_ORDERS)
-      .select("*")
-      .eq("purchase_order_number", orderNumber)
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
   // Get purchase orders by supplier
-  static async getBySupplier(supplierName: string): Promise<Purchase[]> {
+  static async getBySupplier(supplierName: string): Promise<PurchaseOrder[]> {
     const { data, error } = await supabase
       .from(TABLES.PURCHASE_ORDERS)
       .select("*")
       .eq("supplier_name", supplierName)
-      .order("purchase_date", { ascending: false });
+      .order("order_date", { ascending: false });
 
     if (error) throw error;
     return data || [];
   }
 
-  // Get purchase orders by date range
-  static async getByDateRange(
-    startDate: string,
-    endDate: string
-  ): Promise<Purchase[]> {
+  // Get purchase orders by status
+  static async getByStatus(status: string): Promise<PurchaseOrder[]> {
     const { data, error } = await supabase
       .from(TABLES.PURCHASE_ORDERS)
       .select("*")
-      .gte("purchase_date", startDate)
-      .lte("purchase_date", endDate)
-      .order("purchase_date", { ascending: false });
+      .eq("order_status", status)
+      .order("order_date", { ascending: false });
 
     if (error) throw error;
     return data || [];
-  }
-
-  // Get purchase orders by payment status
-  static async getByPaymentStatus(status: string): Promise<Purchase[]> {
-    const { data, error } = await supabase
-      .from(TABLES.PURCHASE_ORDERS)
-      .select("*")
-      .eq("payment_status", status)
-      .order("purchase_date", { ascending: false });
-
-    if (error) throw error;
-    return data || [];
-  }
-
-  // Update payment status
-  static async updatePaymentStatus(
-    id: string,
-    status: "pending" | "paid" | "partial"
-  ): Promise<Purchase> {
-    return this.update(id, { payment_status: status });
   }
 
   // Search purchase orders
-  static async search(query: string): Promise<Purchase[]> {
+  static async search(query: string): Promise<PurchaseOrder[]> {
     const { data, error } = await supabase
       .from(TABLES.PURCHASE_ORDERS)
       .select("*")
       .or(
-        `purchase_order_number.ilike.%${query}%,supplier_name.ilike.%${query}%,supplier_email.ilike.%${query}%`
+        `order_number.ilike.%${query}%,supplier_name.ilike.%${query}%,product_name.ilike.%${query}%`
       )
-      .order("purchase_date", { ascending: false });
+      .order("order_date", { ascending: false });
 
     if (error) throw error;
     return data || [];
@@ -144,29 +108,22 @@ export class PurchaseRepository {
   static async getStats() {
     const { data, error } = await supabase
       .from(TABLES.PURCHASE_ORDERS)
-      .select("final_amount, payment_status");
+      .select("payment_status, order_status, final_amount");
 
     if (error) throw error;
 
-    const totalPurchases =
-      data?.reduce((sum, purchase) => sum + purchase.final_amount, 0) || 0;
-    const paidCount =
-      data?.filter((purchase) => purchase.payment_status === "paid").length ||
-      0;
-    const pendingCount =
-      data?.filter((purchase) => purchase.payment_status === "pending")
-        .length || 0;
-    const partialCount =
-      data?.filter((purchase) => purchase.payment_status === "partial")
-        .length || 0;
-
-    return {
+    const stats = {
       totalOrders: data?.length || 0,
-      totalPurchases,
-      paidCount,
-      pendingCount,
-      partialCount,
-      averageOrderValue: data?.length ? totalPurchases / data.length : 0,
+      totalAmount:
+        data?.reduce((sum, order) => sum + order.final_amount, 0) || 0,
+      paidOrders:
+        data?.filter((order) => order.payment_status === "paid").length || 0,
+      pendingOrders:
+        data?.filter((order) => order.payment_status === "pending").length || 0,
+      deliveredOrders:
+        data?.filter((order) => order.order_status === "delivered").length || 0,
     };
+
+    return stats;
   }
 }
