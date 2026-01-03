@@ -45,34 +45,132 @@ export interface ProductionRecord extends Production {
 
 export interface Inventory {
   id: string;
-  product_id: string;
-  current_stock: number;
-  last_updated: string;
-  warehouse_location?: string;
-  min_threshold: number;
-  max_threshold: number;
-  product?: Product;
+  name: string;
+  category: "copper" | "pvc" | "packing_boxes" | "scrap" | "stamps" | "coils";
+  description?: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  min_stock_level: number;
+  location?: string;
+  status: "available" | "out_of_stock" | "reserved" | "damaged";
+  supplier?: string;
+  purchase_date?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  category_specific_fields?: Record<string, any>;
+
+  // Copper specific fields
+  copper_type?: string;
+  copper_grade?: string;
+  copper_purity?: number;
+  copper_thickness?: number;
+  copper_conductivity?: string;
+
+  // PVC specific fields
+  pvc_type?: string;
+  pvc_grade?: string;
+  pvc_color?: string;
+  pvc_thickness?: number;
+  pvc_hardness?: string;
+  pvc_temperature_rating?: string;
+
+  // Packing Boxes specific fields
+  box_type?: string;
+  box_dimensions?: string;
+  box_material?: string;
+  box_capacity_weight?: number;
+  box_capacity_volume?: number;
+
+  // Scrap specific fields
+  scrap_type?: string;
+  scrap_source?: string;
+  scrap_purity?: number;
+  scrap_condition?: string;
+  scrap_weight?: number;
+
+  // Stamps specific fields
+  stamp_type?: string;
+  stamp_size?: string;
+  stamp_material?: string;
+  stamp_design?: string;
+  stamp_quality?: string;
+
+  // Coils specific fields
+  coil_name?: string;
+  coil_weight?: number;
+  coil_length?: number;
+  coil_thickness?: number;
+  coil_diameter?: number;
+  number_of_goats?: number;
+  coil_material?: string;
+  coil_grade?: string;
+  coil_resistance?: number;
+  coil_insulation?: string;
 }
 
 export interface Sale {
   id: string;
-  invoice_number: string;
-  customer_name: string;
+
+  // Party/Customer Information
+  party_name: string;
   customer_email?: string;
   customer_phone?: string;
   customer_address?: string;
-  sale_date: string;
+  billing_address?: string;
+
+  // Product Information
+  coil_name: string;
+  product_category?: string;
+  product_description?: string;
+
+  // Quantity and Pricing
+  quantity: number;
+  unit: string;
+  unit_price: number;
   total_amount: number;
+
+  // Financial Details
   tax_amount: number;
   discount_amount: number;
   final_amount: number;
+
+  // Accounting Fields
+  debit: number;
+  credit: number;
   payment_status: "pending" | "paid" | "partial" | "overdue";
   payment_method?: string;
-  notes?: string;
-  created_by: string;
+  payment_due_date?: string;
+
+  // Transaction Details
+  invoice_number?: string;
+  sale_date: string;
+  delivery_date?: string;
+
+  // Status and Tracking
+  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+  order_status:
+    | "processing"
+    | "confirmed"
+    | "shipped"
+    | "delivered"
+    | "cancelled";
+
+  // Comments and Notes
+  comments?: string;
+  internal_notes?: string;
+
+  // Additional Fields
+  reference_number?: string;
+  terms_conditions?: string;
+  delivery_address?: string;
+
+  // Metadata
+  created_by?: string;
   created_at: string;
   updated_at: string;
-  sale_items?: SaleItem[];
+  updated_by?: string;
 }
 
 export interface SaleItem {

@@ -14,7 +14,7 @@ export default function Layout({ children }: LayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -27,6 +27,13 @@ export default function Layout({ children }: LayoutProps) {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  // Redirect to login if not authenticated after loading
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, isLoading, router]);
 
   const handleLogout = () => {
     logout();
@@ -41,15 +48,21 @@ export default function Layout({ children }: LayoutProps) {
     setIsMobileMenuOpen(false);
   };
 
-  // If no user, redirect to login
-  useEffect(() => {
-    if (!user) {
-      router.push("/login");
-    }
-  }, [user, router]);
+  // If still loading authentication, show loading spinner
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
+  // If no user after loading, show nothing (will redirect)
   if (!user) {
-    return null; // Will redirect to login
+    return null;
   }
 
   return (

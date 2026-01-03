@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useInventory } from "@/hooks/useInventory";
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { InventoryRepository } from "@/repositories/inventoryRepository";
+import { Inventory } from "@/types";
 import {
   Card,
   CardContent,
@@ -18,25 +20,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, ArrowLeft, Save, Package } from "lucide-react";
+import { ArrowLeft, Save, Package, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Textarea } from "@/components/ui/textarea";
-import { useRouter } from "next/navigation";
 
-export default function InventoryCreatePage() {
+export default function InventoryEditPage() {
+  const params = useParams();
   const router = useRouter();
-  const { createInventoryItem } = useInventory();
 
   const [formData, setFormData] = useState({
     name: "",
-    category: "" as
+    category: "copper" as
       | "copper"
       | "pvc"
       | "packing_boxes"
       | "scrap"
       | "stamps"
-      | "coils"
-      | "",
+      | "coils",
     description: "",
     quantity: 0,
     unit: "pcs",
@@ -101,74 +101,187 @@ export default function InventoryCreatePage() {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchItem = async () => {
+      try {
+        const id = params.id as string;
+        if (!id) {
+          setError("Invalid item ID");
+          setIsLoading(false);
+          return;
+        }
+
+        const item = await InventoryRepository.getById(id);
+        if (!item) {
+          setError("Item not found");
+          setIsLoading(false);
+          return;
+        }
+
+        // Populate form with item data
+        setFormData({
+          name: item.name || "",
+          category: item.category || "copper",
+          description: item.description || "",
+          quantity: item.quantity || 0,
+          unit: item.unit || "pcs",
+          unit_price: item.unit_price || 0,
+          min_stock_level: item.min_stock_level || 0,
+          location: item.location || "",
+          status: item.status || "available",
+          supplier: item.supplier || "",
+          purchase_date: item.purchase_date || "",
+
+          // Copper fields
+          copper_type: item.copper_type || "",
+          copper_grade: item.copper_grade || "",
+          copper_purity: item.copper_purity || 0,
+          copper_thickness: item.copper_thickness || 0,
+          copper_conductivity: item.copper_conductivity || "",
+
+          // PVC fields
+          pvc_type: item.pvc_type || "",
+          pvc_grade: item.pvc_grade || "",
+          pvc_color: item.pvc_color || "",
+          pvc_thickness: item.pvc_thickness || 0,
+          pvc_hardness: item.pvc_hardness || "",
+          pvc_temperature_rating: item.pvc_temperature_rating || "",
+
+          // Packing boxes fields
+          box_type: item.box_type || "",
+          box_dimensions: item.box_dimensions || "",
+          box_material: item.box_material || "",
+          box_capacity_weight: item.box_capacity_weight || 0,
+          box_capacity_volume: item.box_capacity_volume || 0,
+
+          // Scrap fields
+          scrap_type: item.scrap_type || "",
+          scrap_source: item.scrap_source || "",
+          scrap_purity: item.scrap_purity || 0,
+          scrap_condition: item.scrap_condition || "",
+          scrap_weight: item.scrap_weight || 0,
+
+          // Stamps fields
+          stamp_type: item.stamp_type || "",
+          stamp_size: item.stamp_size || "",
+          stamp_material: item.stamp_material || "",
+          stamp_design: item.stamp_design || "",
+          stamp_quality: item.stamp_quality || "",
+
+          // Coils fields
+          coil_name: item.coil_name || "",
+          coil_weight: item.coil_weight || 0,
+          coil_length: item.coil_length || 0,
+          coil_thickness: item.coil_thickness || 0,
+          coil_diameter: item.coil_diameter || 0,
+          number_of_goats: item.number_of_goats || 0,
+          coil_material: item.coil_material || "",
+          coil_grade: item.coil_grade || "",
+          coil_resistance: item.coil_resistance || 0,
+          coil_insulation: item.coil_insulation || "",
+        });
+
+        setIsLoading(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch item");
+        setIsLoading(false);
+      }
+    };
+
+    fetchItem();
+  }, [params.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      await createInventoryItem(formData);
-      resetForm();
-      alert("Inventory item created successfully!");
-      router.push("/inventory");
+      const id = params.id as string;
+
+      // Only include fields that are relevant for the selected category
+      const updateData: Partial<Inventory> = {
+        name: formData.name,
+        category: formData.category,
+        description: formData.description,
+        quantity: formData.quantity,
+        unit: formData.unit,
+        unit_price: formData.unit_price,
+        min_stock_level: formData.min_stock_level,
+        location: formData.location,
+        status: formData.status,
+        supplier: formData.supplier,
+        purchase_date: formData.purchase_date,
+      };
+
+      // Add category-specific fields
+      if (formData.category === "copper") {
+        Object.assign(updateData, {
+          copper_type: formData.copper_type,
+          copper_grade: formData.copper_grade,
+          copper_purity: formData.copper_purity,
+          copper_thickness: formData.copper_thickness,
+          copper_conductivity: formData.copper_conductivity,
+        });
+      } else if (formData.category === "pvc") {
+        Object.assign(updateData, {
+          pvc_type: formData.pvc_type,
+          pvc_grade: formData.pvc_grade,
+          pvc_color: formData.pvc_color,
+          pvc_thickness: formData.pvc_thickness,
+          pvc_hardness: formData.pvc_hardness,
+          pvc_temperature_rating: formData.pvc_temperature_rating,
+        });
+      } else if (formData.category === "packing_boxes") {
+        Object.assign(updateData, {
+          box_type: formData.box_type,
+          box_dimensions: formData.box_dimensions,
+          box_material: formData.box_material,
+          box_capacity_weight: formData.box_capacity_weight,
+          box_capacity_volume: formData.box_capacity_volume,
+        });
+      } else if (formData.category === "scrap") {
+        Object.assign(updateData, {
+          scrap_type: formData.scrap_type,
+          scrap_source: formData.scrap_source,
+          scrap_purity: formData.scrap_purity,
+          scrap_condition: formData.scrap_condition,
+          scrap_weight: formData.scrap_weight,
+        });
+      } else if (formData.category === "stamps") {
+        Object.assign(updateData, {
+          stamp_type: formData.stamp_type,
+          stamp_size: formData.stamp_size,
+          stamp_material: formData.stamp_material,
+          stamp_design: formData.stamp_design,
+          stamp_quality: formData.stamp_quality,
+        });
+      } else if (formData.category === "coils") {
+        Object.assign(updateData, {
+          coil_name: formData.coil_name,
+          coil_weight: formData.coil_weight,
+          coil_length: formData.coil_length,
+          coil_thickness: formData.coil_thickness,
+          coil_diameter: formData.coil_diameter,
+          number_of_goats: formData.number_of_goats,
+          coil_material: formData.coil_material,
+          coil_grade: formData.coil_grade,
+          coil_resistance: formData.coil_resistance,
+          coil_insulation: formData.coil_insulation,
+        });
+      }
+
+      await InventoryRepository.update(id, updateData);
+      alert("Inventory item updated successfully!");
+      router.push("/inventory/view");
     } catch (error) {
-      console.error("Failed to create inventory item:", error);
-      alert("Failed to create inventory item. Please try again.");
+      console.error("Failed to update inventory item:", error);
+      alert("Failed to update inventory item. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      category: "",
-      description: "",
-      quantity: 0,
-      unit: "pcs",
-      unit_price: 0,
-      min_stock_level: 0,
-      location: "",
-      status: "available",
-      supplier: "",
-      purchase_date: "",
-      copper_type: "",
-      copper_grade: "",
-      copper_purity: 0,
-      copper_thickness: 0,
-      copper_conductivity: "",
-      pvc_type: "",
-      pvc_grade: "",
-      pvc_color: "",
-      pvc_thickness: 0,
-      pvc_hardness: "",
-      pvc_temperature_rating: "",
-      box_type: "",
-      box_dimensions: "",
-      box_material: "",
-      box_capacity_weight: 0,
-      box_capacity_volume: 0,
-      scrap_type: "",
-      scrap_source: "",
-      scrap_purity: 0,
-      scrap_condition: "",
-      scrap_weight: 0,
-      stamp_type: "",
-      stamp_size: "",
-      stamp_material: "",
-      stamp_design: "",
-      stamp_quality: "",
-      coil_name: "",
-      coil_weight: 0,
-      coil_length: 0,
-      coil_thickness: 0,
-      coil_diameter: 0,
-      number_of_goats: 0,
-      coil_material: "",
-      coil_grade: "",
-      coil_resistance: 0,
-      coil_insulation: "",
-    });
   };
 
   const renderCategorySpecificFields = () => {
@@ -788,12 +901,43 @@ export default function InventoryCreatePage() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="container mx-auto max-w-7xl">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="container mx-auto max-w-7xl">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h3 className="text-red-800 font-semibold">Error</h3>
+            <p className="text-red-600">{error}</p>
+            <Link href="/inventory/view">
+              <Button className="mt-4">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Inventory
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="container mx-auto max-w-7xl">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Link href="/inventory">
+            <Link href="/inventory/view">
               <Button
                 variant="outline"
                 size="lg"
@@ -806,7 +950,7 @@ export default function InventoryCreatePage() {
             <div className="flex items-center gap-3">
               <Package className="h-8 w-8 text-blue-600" />
               <h1 className="text-4xl font-bold text-blue-900">
-                Create Inventory Item
+                Edit Inventory Item
               </h1>
             </div>
           </div>
@@ -815,11 +959,11 @@ export default function InventoryCreatePage() {
         <Card className="shadow-xl border-0 bg-white">
           <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
             <CardTitle className="flex items-center gap-3 text-2xl">
-              <Plus className="h-6 w-6" />
-              Add New Inventory Item
+              <Package className="h-6 w-6" />
+              Update Inventory Item
             </CardTitle>
             <CardDescription className="text-blue-100">
-              Enter inventory details to create a new item in the system
+              Modify the details of this inventory item
             </CardDescription>
           </CardHeader>
           <CardContent className="p-8">
@@ -851,7 +995,16 @@ export default function InventoryCreatePage() {
                     <Select
                       value={formData.category}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, category: value as any })
+                        setFormData({
+                          ...formData,
+                          category: value as
+                            | "copper"
+                            | "pvc"
+                            | "packing_boxes"
+                            | "scrap"
+                            | "stamps"
+                            | "coils",
+                        })
                       }
                     >
                       <SelectTrigger className="h-12 text-lg border-blue-200 focus:border-blue-500">
@@ -968,7 +1121,14 @@ export default function InventoryCreatePage() {
                     <Select
                       value={formData.status}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, status: value as any })
+                        setFormData({
+                          ...formData,
+                          status: value as
+                            | "available"
+                            | "out_of_stock"
+                            | "reserved"
+                            | "damaged",
+                        })
                       }
                     >
                       <SelectTrigger className="h-12 text-lg border-blue-200 focus:border-blue-500">
@@ -1044,24 +1204,25 @@ export default function InventoryCreatePage() {
                 >
                   {isSubmitting ? (
                     <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                      Creating Item...
+                      <Loader2 className="animate-spin h-5 w-5 border-b-2 border-white mr-3"></Loader2>
+                      Updating Item...
                     </>
                   ) : (
                     <>
                       <Save className="mr-2 h-5 w-5" />
-                      Create Inventory Item
+                      Update Inventory Item
                     </>
                   )}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={resetForm}
-                  className="h-14 px-8 text-lg font-semibold border-blue-300 text-blue-700 hover:bg-blue-50"
-                >
-                  Reset Form
-                </Button>
+                <Link href="/inventory/view">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-14 px-8 text-lg font-semibold border-blue-300 text-blue-700 hover:bg-blue-50"
+                  >
+                    Cancel
+                  </Button>
+                </Link>
               </div>
             </form>
           </CardContent>

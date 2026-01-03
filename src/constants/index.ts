@@ -5,7 +5,7 @@ export const TABLES = {
   INVENTORY: "inventory",
   PURCHASE_ORDERS: "purchase_orders",
   PURCHASE_ORDER_ITEMS: "purchase_order_items",
-  SALES_ORDERS: "sales_orders",
+  SALES_ORDERS: "sales",
   SALES_ORDER_ITEMS: "sales_order_items",
   INVOICES: "invoices",
   INVOICE_ITEMS: "invoice_items",

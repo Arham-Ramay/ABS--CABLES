@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -19,33 +19,173 @@ import {
 } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  DollarSign,
+  Package,
+  User,
+  Calendar,
+} from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { SalesRepository } from "@/repositories/salesRepository";
+import { Sale } from "@/types";
 
-export default function SalesEditPage() {
+export default function SalesEditPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const router = useRouter();
+  const [saleId, setSaleId] = useState<string>("");
+
+  // Handle async params
+  useEffect(() => {
+    const getParams = async () => {
+      const resolvedParams = await params;
+      const id = resolvedParams.id;
+      console.log("Resolved sale ID:", id);
+      setSaleId(id);
+    };
+    getParams();
+  }, [params]);
 
   const [formData, setFormData] = useState({
-    invoice_number: "INV001",
-    customer_name: "John Customer",
-    customer_email: "john@example.com",
-    customer_phone: "+1234567890",
-    customer_address: "123 Main St",
-    sale_date: "2024-01-15",
-    total_amount: 1500,
-    tax_amount: 150,
+    // Party Information
+    party_name: "",
+    customer_email: "",
+    customer_phone: "",
+    customer_address: "",
+    billing_address: "",
+
+    // Product Information
+    coil_name: "",
+    product_category: "",
+    product_description: "",
+
+    // Quantity and Pricing
+    quantity: 0,
+    unit: "pcs",
+    unit_price: 0,
+    total_amount: 0,
+
+    // Financial Details
+    tax_amount: 0,
     discount_amount: 0,
-    final_amount: 1650,
-    payment_status: "paid",
-    payment_method: "Credit Card",
-    notes: "Regular customer",
+    final_amount: 0,
+
+    // Accounting Fields
+    debit: 0,
+    credit: 0,
+    payment_status: "pending" as "pending" | "paid" | "partial" | "overdue",
+    payment_method: "",
+    payment_due_date: "",
+
+    // Transaction Details
+    invoice_number: "",
+    sale_date: new Date().toISOString().split("T")[0],
+    delivery_date: "",
+
+    // Status and Tracking
+    status: "pending" as
+      | "pending"
+      | "confirmed"
+      | "shipped"
+      | "delivered"
+      | "cancelled",
+    order_status: "processing" as
+      | "processing"
+      | "confirmed"
+      | "shipped"
+      | "delivered"
+      | "cancelled",
+
+    // Comments and Notes
+    comments: "",
+    internal_notes: "",
+
+    // Additional Fields
+    reference_number: "",
+    terms_conditions: "",
+    delivery_address: "",
+    created_by: "Admin",
   });
 
   const [loading, setLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(true);
 
-  const calculateFinalAmount = () => {
-    const final =
-      formData.total_amount + formData.tax_amount - formData.discount_amount;
-    setFormData((prev) => ({ ...prev, final_amount: final }));
+  // Load existing sale data - optimized to run only once
+  useEffect(() => {
+    const loadSale = async () => {
+      if (!saleId) return; // Don't load if no ID
+
+      try {
+        console.log("Loading sale with ID:", saleId);
+        const sale = await SalesRepository.getById(saleId);
+        console.log("Loaded sale data:", sale);
+
+        if (sale) {
+          // Set all form data at once to avoid multiple re-renders
+          setFormData({
+            party_name: sale.party_name || "",
+            customer_email: sale.customer_email || "",
+            customer_phone: sale.customer_phone || "",
+            customer_address: sale.customer_address || "",
+            billing_address: sale.billing_address || "",
+            coil_name: sale.coil_name || "",
+            product_category: sale.product_category || "",
+            product_description: sale.product_description || "",
+            quantity: sale.quantity || 0,
+            unit: sale.unit || "pcs",
+            unit_price: sale.unit_price || 0,
+            total_amount: sale.total_amount || 0,
+            tax_amount: sale.tax_amount || 0,
+            discount_amount: sale.discount_amount || 0,
+            final_amount: sale.final_amount || 0,
+            debit: sale.debit || 0,
+            credit: sale.credit || 0,
+            payment_status: sale.payment_status || "pending",
+            payment_method: sale.payment_method || "",
+            payment_due_date: sale.payment_due_date || "",
+            invoice_number: sale.invoice_number || "",
+            sale_date: sale.sale_date || new Date().toISOString().split("T")[0],
+            delivery_date: sale.delivery_date || "",
+            status: sale.status || "pending",
+            order_status: sale.order_status || "processing",
+            comments: sale.comments || "",
+            internal_notes: sale.internal_notes || "",
+            reference_number: sale.reference_number || "",
+            terms_conditions: sale.terms_conditions || "",
+            delivery_address: sale.delivery_address || "",
+            created_by: sale.created_by || "Admin",
+          });
+        } else {
+          console.log("No sale found with ID:", saleId);
+          alert("Sale not found. Please check sale ID.");
+        }
+      } catch (error) {
+        console.error("Error loading sale:", error);
+        alert(
+          `Failed to load sale data: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      } finally {
+        setFetchLoading(false);
+      }
+    };
+
+    loadSale();
+  }, [saleId]); // Only re-run if ID changes
+
+  // Optimized calculation function - memoized to avoid unnecessary recalculations
+  const calculateFinalAmount = (currentData = formData) => {
+    const total = currentData.quantity * currentData.unit_price;
+    const final = total + currentData.tax_amount - currentData.discount_amount;
+    return {
+      total_amount: total,
+      final_amount: Math.max(0, final),
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,284 +193,705 @@ export default function SalesEditPage() {
     setLoading(true);
 
     try {
-      // TODO: Implement actual update logic with Supabase
-      console.log("Updating sales order:", formData);
+      // Prepare data for submission
+      const submissionData = {
+        party_name: formData.party_name,
+        customer_email: formData.customer_email,
+        customer_phone: formData.customer_phone,
+        customer_address: formData.customer_address,
+        billing_address: formData.billing_address,
+        coil_name: formData.coil_name,
+        product_category: formData.product_category,
+        product_description: formData.product_description,
+        quantity: formData.quantity,
+        unit: formData.unit,
+        unit_price: formData.unit_price,
+        total_amount: formData.total_amount,
+        tax_amount: formData.tax_amount,
+        discount_amount: formData.discount_amount,
+        final_amount: formData.final_amount,
+        debit: formData.debit,
+        credit: formData.credit,
+        payment_status: formData.payment_status,
+        payment_method: formData.payment_method,
+        payment_due_date: formData.payment_due_date,
+        invoice_number: formData.invoice_number,
+        sale_date: formData.sale_date,
+        delivery_date: formData.delivery_date,
+        status: formData.status,
+        order_status: formData.order_status,
+        comments: formData.comments,
+        internal_notes: formData.internal_notes,
+        reference_number: formData.reference_number,
+        terms_conditions: formData.terms_conditions,
+        delivery_address: formData.delivery_address,
+        updated_by: formData.created_by,
+      };
+
+      const updatedSale = await SalesRepository.update(saleId, submissionData);
+      console.log("Sale updated successfully:", updatedSale);
+      alert("Sale updated successfully!");
       router.push("/sales");
-    } catch (error) {
-      console.error("Error updating sales order:", error);
+    } catch (err) {
+      console.error("Failed to update sale:", err);
+      alert("Failed to update sale. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (field: string, value: string | number) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+  if (fetchLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading sale data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      {/* Header */}
       <div className="flex items-center space-x-4">
         <Link href="/sales">
-          <Button variant="ghost" size="sm" className="cursor-pointer">
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer bg-white shadow-md hover:shadow-lg transition-shadow"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Sales
           </Button>
         </Link>
-        <h1 className="text-3xl font-bold text-black">Edit Sales Order</h1>
+        <div>
+          <h1 className="text-4xl font-bold text-gray-900">Edit Sales Order</h1>
+          <p className="text-gray-600 mt-2">
+            Update the sales transaction information
+          </p>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-black">Sales Order Details</CardTitle>
-          <CardDescription className="text-black">
-            Update the sales order information below
+      {/* Main Form Card */}
+      <Card className="max-w-6xl mx-auto shadow-xl border-0 bg-white">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+          <CardTitle className="flex items-center text-2xl">
+            <DollarSign className="w-6 h-6 mr-2" />
+            Sales Information
+          </CardTitle>
+          <CardDescription className="text-blue-100">
+            Update the details for this sales transaction
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Invoice Number
-                </label>
-                <Input
-                  value={formData.invoice_number}
-                  onChange={(e) =>
-                    handleChange("invoice_number", e.target.value)
-                  }
-                  className="cursor-pointer"
-                />
+        <CardContent className="p-8">
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Party/Customer Information */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-blue-900 border-b pb-3 flex items-center">
+                <User className="w-5 h-5 mr-2" />
+                Party Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Party Name *
+                  </label>
+                  <Input
+                    value={formData.party_name}
+                    onChange={(e) =>
+                      setFormData({ ...formData, party_name: e.target.value })
+                    }
+                    placeholder="Enter party name"
+                    required
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Email
+                  </label>
+                  <Input
+                    type="email"
+                    value={formData.customer_email}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        customer_email: e.target.value,
+                      })
+                    }
+                    placeholder="party@example.com"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Phone
+                  </label>
+                  <Input
+                    value={formData.customer_phone}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        customer_phone: e.target.value,
+                      })
+                    }
+                    placeholder="+1234567890"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Customer Name
-                </label>
-                <Input
-                  value={formData.customer_name}
-                  onChange={(e) =>
-                    handleChange("customer_name", e.target.value)
-                  }
-                  className="cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Customer Email
-                </label>
-                <Input
-                  type="email"
-                  value={formData.customer_email}
-                  onChange={(e) =>
-                    handleChange("customer_email", e.target.value)
-                  }
-                  className="cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Customer Phone
-                </label>
-                <Input
-                  value={formData.customer_phone}
-                  onChange={(e) =>
-                    handleChange("customer_phone", e.target.value)
-                  }
-                  className="cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Sale Date
-                </label>
-                <Input
-                  type="date"
-                  value={formData.sale_date}
-                  onChange={(e) => handleChange("sale_date", e.target.value)}
-                  className="cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Total Amount
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.total_amount}
-                  onChange={(e) => {
-                    handleChange(
-                      "total_amount",
-                      parseFloat(e.target.value) || 0
-                    );
-                    calculateFinalAmount();
-                  }}
-                  className="cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Tax Amount
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.tax_amount}
-                  onChange={(e) => {
-                    handleChange("tax_amount", parseFloat(e.target.value) || 0);
-                    calculateFinalAmount();
-                  }}
-                  className="cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Discount Amount
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.discount_amount}
-                  onChange={(e) => {
-                    handleChange(
-                      "discount_amount",
-                      parseFloat(e.target.value) || 0
-                    );
-                    calculateFinalAmount();
-                  }}
-                  className="cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Final Amount
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.final_amount}
-                  readOnly
-                  className="bg-gray-50 cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Payment Status
-                </label>
-                <Select
-                  value={formData.payment_status}
-                  onValueChange={(value) =>
-                    handleChange("payment_status", value)
-                  }
-                >
-                  <SelectTrigger className="cursor-pointer">
-                    <SelectValue placeholder="Select payment status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending" className="cursor-pointer">
-                      Pending
-                    </SelectItem>
-                    <SelectItem value="paid" className="cursor-pointer">
-                      Paid
-                    </SelectItem>
-                    <SelectItem value="partial" className="cursor-pointer">
-                      Partial
-                    </SelectItem>
-                    <SelectItem value="overdue" className="cursor-pointer">
-                      Overdue
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Payment Method
-                </label>
-                <Select
-                  value={formData.payment_method}
-                  onValueChange={(value) =>
-                    handleChange("payment_method", value)
-                  }
-                >
-                  <SelectTrigger className="cursor-pointer">
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Credit Card" className="cursor-pointer">
-                      Credit Card
-                    </SelectItem>
-                    <SelectItem value="Debit Card" className="cursor-pointer">
-                      Debit Card
-                    </SelectItem>
-                    <SelectItem value="Cash" className="cursor-pointer">
-                      Cash
-                    </SelectItem>
-                    <SelectItem
-                      value="Bank Transfer"
-                      className="cursor-pointer"
-                    >
-                      Bank Transfer
-                    </SelectItem>
-                    <SelectItem value="Check" className="cursor-pointer">
-                      Check
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Billing Address
+                  </label>
+                  <Textarea
+                    value={formData.billing_address}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        billing_address: e.target.value,
+                      })
+                    }
+                    placeholder="Enter billing address"
+                    rows={3}
+                    className="border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Delivery Address
+                  </label>
+                  <Textarea
+                    value={formData.delivery_address}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        delivery_address: e.target.value,
+                      })
+                    }
+                    placeholder="Enter delivery address"
+                    rows={3}
+                    className="border-blue-200 focus:border-blue-500"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Customer Address
-              </label>
-              <Input
-                value={formData.customer_address}
-                onChange={(e) =>
-                  handleChange("customer_address", e.target.value)
-                }
-                className="cursor-pointer"
-              />
+            {/* Product Information */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-blue-900 border-b pb-3 flex items-center">
+                <Package className="w-5 h-5 mr-2" />
+                Product Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Coil Name *
+                  </label>
+                  <Input
+                    value={formData.coil_name}
+                    onChange={(e) =>
+                      setFormData({ ...formData, coil_name: e.target.value })
+                    }
+                    placeholder="Enter coil name"
+                    required
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Product Category
+                  </label>
+                  <Select
+                    value={formData.product_category}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, product_category: value })
+                    }
+                  >
+                    <SelectTrigger className="h-12 text-lg border-blue-200 focus:border-blue-500">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="copper">Copper</SelectItem>
+                      <SelectItem value="pvc">PVC</SelectItem>
+                      <SelectItem value="coils">Coils</SelectItem>
+                      <SelectItem value="packing_boxes">
+                        Packing Boxes
+                      </SelectItem>
+                      <SelectItem value="scrap">Scrap</SelectItem>
+                      <SelectItem value="stamps">Stamps</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Unit
+                  </label>
+                  <Select
+                    value={formData.unit}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, unit: value })
+                    }
+                  >
+                    <SelectTrigger className="h-12 text-lg border-blue-200 focus:border-blue-500">
+                      <SelectValue placeholder="Select unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pcs">Pieces</SelectItem>
+                      <SelectItem value="kg">Kilograms</SelectItem>
+                      <SelectItem value="meters">Meters</SelectItem>
+                      <SelectItem value="boxes">Boxes</SelectItem>
+                      <SelectItem value="rolls">Rolls</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-blue-700 mb-2">
+                  Product Description
+                </label>
+                <Textarea
+                  value={formData.product_description}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      product_description: e.target.value,
+                    })
+                  }
+                  placeholder="Enter product description"
+                  rows={3}
+                  className="border-blue-200 focus:border-blue-500"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Notes
-              </label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => handleChange("notes", e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-md cursor-pointer"
-                rows={3}
-                placeholder="Add any additional notes..."
-              />
+            {/* Quantity and Pricing */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-blue-900 border-b pb-3 flex items-center">
+                <DollarSign className="w-5 h-5 mr-2" />
+                Quantity & Pricing
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Quantity *
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.quantity === 0 ? "" : formData.quantity}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const numValue =
+                        value === "" ? 0 : parseFloat(value) || 0;
+                      const newFormData = { ...formData, quantity: numValue };
+                      const calculatedAmounts =
+                        calculateFinalAmount(newFormData);
+                      setFormData({
+                        ...newFormData,
+                        ...calculatedAmounts,
+                      });
+                    }}
+                    placeholder="0"
+                    required
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Unit Price *
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.unit_price === 0 ? "" : formData.unit_price}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const numValue =
+                        value === "" ? 0 : parseFloat(value) || 0;
+                      const newFormData = { ...formData, unit_price: numValue };
+                      const calculatedAmounts =
+                        calculateFinalAmount(newFormData);
+                      setFormData({
+                        ...newFormData,
+                        ...calculatedAmounts,
+                      });
+                    }}
+                    placeholder="0.00"
+                    required
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Tax Amount
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.tax_amount === 0 ? "" : formData.tax_amount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const numValue =
+                        value === "" ? 0 : parseFloat(value) || 0;
+                      const newFormData = { ...formData, tax_amount: numValue };
+                      const calculatedAmounts =
+                        calculateFinalAmount(newFormData);
+                      setFormData({
+                        ...newFormData,
+                        ...calculatedAmounts,
+                      });
+                    }}
+                    placeholder="0.00"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Discount Amount
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={
+                      formData.discount_amount === 0
+                        ? ""
+                        : formData.discount_amount
+                    }
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const numValue =
+                        value === "" ? 0 : parseFloat(value) || 0;
+                      const newFormData = {
+                        ...formData,
+                        discount_amount: numValue,
+                      };
+                      const calculatedAmounts =
+                        calculateFinalAmount(newFormData);
+                      setFormData({
+                        ...newFormData,
+                        ...calculatedAmounts,
+                      });
+                    }}
+                    placeholder="0.00"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Accounting Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Debit Amount
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.debit === 0 ? "" : formData.debit}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        debit: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    placeholder="0.00"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Credit Amount
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.credit === 0 ? "" : formData.credit}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        credit: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    placeholder="0.00"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Amount Summary */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Total Amount</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      ${formData.total_amount.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Tax Amount</p>
+                    <p className="text-xl font-bold text-green-600">
+                      ${formData.tax_amount.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Discount Amount</p>
+                    <p className="text-xl font-bold text-red-600">
+                      ${formData.discount_amount.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Final Amount</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      ${formData.final_amount.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex justify-end space-x-4">
+            {/* Transaction Details */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-blue-900 border-b pb-3 flex items-center">
+                <Calendar className="w-5 h-5 mr-2" />
+                Transaction Details
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Invoice Number
+                  </label>
+                  <Input
+                    value={formData.invoice_number}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        invoice_number: e.target.value,
+                      })
+                    }
+                    placeholder="INV-001"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Sale Date *
+                  </label>
+                  <Input
+                    type="date"
+                    value={formData.sale_date}
+                    onChange={(e) =>
+                      setFormData({ ...formData, sale_date: e.target.value })
+                    }
+                    required
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Delivery Date
+                  </label>
+                  <Input
+                    type="date"
+                    value={formData.delivery_date}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        delivery_date: e.target.value,
+                      })
+                    }
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Payment Due Date
+                  </label>
+                  <Input
+                    type="date"
+                    value={formData.payment_due_date}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        payment_due_date: e.target.value,
+                      })
+                    }
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Payment Status
+                  </label>
+                  <Select
+                    value={formData.payment_status}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        payment_status: value as
+                          | "pending"
+                          | "paid"
+                          | "partial"
+                          | "overdue",
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-12 text-lg border-blue-200 focus:border-blue-500">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="partial">Partial</SelectItem>
+                      <SelectItem value="overdue">Overdue</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Order Status
+                  </label>
+                  <Select
+                    value={formData.order_status}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        order_status: value as
+                          | "processing"
+                          | "confirmed"
+                          | "shipped"
+                          | "delivered"
+                          | "cancelled",
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-12 text-lg border-blue-200 focus:border-blue-500">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="confirmed">Confirmed</SelectItem>
+                      <SelectItem value="shipped">Shipped</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Payment Method
+                  </label>
+                  <Input
+                    value={formData.payment_method}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        payment_method: e.target.value,
+                      })
+                    }
+                    placeholder="Cash, Card, Bank Transfer"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Reference Number
+                  </label>
+                  <Input
+                    value={formData.reference_number}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        reference_number: e.target.value,
+                      })
+                    }
+                    placeholder="REF-001"
+                    className="h-12 text-lg border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Comments and Notes */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-blue-900 border-b pb-3">
+                Comments & Notes
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Comments (Customer-facing)
+                  </label>
+                  <Textarea
+                    value={formData.comments}
+                    onChange={(e) =>
+                      setFormData({ ...formData, comments: e.target.value })
+                    }
+                    placeholder="Enter comments for customer"
+                    rows={3}
+                    className="border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-700 mb-2">
+                    Internal Notes
+                  </label>
+                  <Textarea
+                    value={formData.internal_notes}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        internal_notes: e.target.value,
+                      })
+                    }
+                    placeholder="Enter internal notes for staff"
+                    rows={3}
+                    className="border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-blue-700 mb-2">
+                  Terms & Conditions
+                </label>
+                <Textarea
+                  value={formData.terms_conditions}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      terms_conditions: e.target.value,
+                    })
+                  }
+                  placeholder="Enter terms and conditions"
+                  rows={3}
+                  className="border-blue-200 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-4 pt-6 border-t">
               <Link href="/sales">
                 <Button
                   type="button"
                   variant="outline"
-                  className="cursor-pointer"
+                  className="h-12 px-8 cursor-pointer"
                 >
                   Cancel
                 </Button>
               </Link>
               <Button
                 type="submit"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 h-12 px-8 text-white font-semibold cursor-pointer"
                 disabled={loading}
-                className="cursor-pointer"
               >
                 <Save className="w-4 h-4 mr-2" />
                 {loading ? "Saving..." : "Save Changes"}

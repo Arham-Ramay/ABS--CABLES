@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -36,47 +36,40 @@ import {
   XCircle,
   Clock,
   DollarSign,
+  Package,
 } from "lucide-react";
 import Link from "next/link";
-
-// Mock data for sales
-const mockSales = [
-  {
-    id: "1",
-    invoice_number: "INV-001",
-    customer_name: "John Customer",
-    customer_email: "john@example.com",
-    customer_phone: "+1234567890",
-    sale_date: "2024-01-15",
-    total_amount: 1500,
-    final_amount: 1650,
-    payment_status: "paid" as const,
-    payment_method: "Credit Card",
-  },
-  {
-    id: "2",
-    invoice_number: "INV-002",
-    customer_name: "Jane Customer",
-    customer_email: "jane@example.com",
-    customer_phone: "+1234567891",
-    sale_date: "2024-01-16",
-    total_amount: 2000,
-    final_amount: 2200,
-    payment_status: "pending" as const,
-    payment_method: "Bank Transfer",
-  },
-];
+import { SalesRepository } from "@/repositories/salesRepository";
+import { Sale } from "@/types";
 
 export default function SalesPage() {
-  const [sales] = useState(mockSales);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Load sales data from database
+  useEffect(() => {
+    const loadSales = async () => {
+      try {
+        const salesData = await SalesRepository.getAll();
+        setSales(salesData);
+      } catch (error) {
+        console.error("Error loading sales:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSales();
+  }, []);
 
   const filteredSales = sales.filter((sale) => {
     const matchesSearch =
       searchTerm === "" ||
-      sale.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.invoice_number.toLowerCase().includes(searchTerm.toLowerCase());
+      sale.party_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.coil_name.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
       filterStatus === "all" || sale.payment_status === filterStatus;
@@ -86,13 +79,29 @@ export default function SalesPage() {
 
   const exportCSV = () => {
     const csvData = [
-      ["Invoice", "Customer", "Email", "Phone", "Date", "Amount", "Status"],
+      [
+        "Invoice",
+        "Party Name",
+        "Coil Name",
+        "Email",
+        "Phone",
+        "Date",
+        "Quantity",
+        "Unit Price",
+        "Total",
+        "Final Amount",
+        "Status",
+      ],
       ...filteredSales.map((sale) => [
-        sale.invoice_number,
-        sale.customer_name,
+        sale.invoice_number || "N/A",
+        sale.party_name,
+        sale.coil_name,
         sale.customer_email || "N/A",
         sale.customer_phone || "N/A",
         sale.sale_date,
+        sale.quantity.toString(),
+        sale.unit_price.toString(),
+        sale.total_amount.toString(),
         sale.final_amount.toString(),
         sale.payment_status,
       ]),
@@ -107,6 +116,18 @@ export default function SalesPage() {
     a.click();
   };
 
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this sale?")) {
+      try {
+        await SalesRepository.delete(id);
+        setSales(sales.filter((sale) => sale.id !== id));
+      } catch (error) {
+        console.error("Error deleting sale:", error);
+        alert("Failed to delete sale. Please try again.");
+      }
+    }
+  };
+
   const totalSales = filteredSales.length;
   const paidSales = filteredSales.filter(
     (sale) => sale.payment_status === "paid"
@@ -119,10 +140,26 @@ export default function SalesPage() {
     0
   );
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading sales data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-gray-900">Sales Management</h2>
+        <div>
+          <h2 className="text-4xl font-bold text-gray-900">Sales Management</h2>
+          <p className="text-gray-600 mt-2">
+            Manage and track your sales transactions
+          </p>
+        </div>
         <div className="flex space-x-2">
           <Link href="/sales/create">
             <Button className="bg-blue-600 hover:bg-blue-700 text-white cursor-pointer">
@@ -141,61 +178,73 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sales Overview</CardTitle>
-          <CardDescription>Summary of sales statistics</CardDescription>
+      {/* Sales Overview Cards */}
+      <Card className="shadow-lg border-0">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+          <CardTitle className="text-2xl">Sales Overview</CardTitle>
+          <CardDescription className="text-blue-100">
+            Real-time sales statistics and metrics
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <ShoppingCart className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-blue-600">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="text-center p-6 bg-blue-50 rounded-lg border border-blue-200 hover:shadow-md transition-shadow">
+              <ShoppingCart className="w-10 h-10 text-blue-600 mx-auto mb-3" />
+              <div className="text-3xl font-bold text-blue-600">
                 {totalSales}
               </div>
-              <div className="text-sm text-gray-800">Total Sales</div>
+              <div className="text-sm text-gray-700 font-medium">
+                Total Sales
+              </div>
             </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <CheckCircle className="-8 h-8 text-green-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-green-600">
+            <div className="text-center p-6 bg-green-50 rounded-lg border border-green-200 hover:shadow-md transition-shadow">
+              <CheckCircle className="w-10 h-10 text-green-600 mx-auto mb-3" />
+              <div className="text-3xl font-bold text-green-600">
                 {paidSales}
               </div>
-              <div className="text-sm text-gray-800">Paid</div>
+              <div className="text-sm text-gray-700 font-medium">Paid</div>
             </div>
-            <div className="text-center p-4 bg-yellow-50 rounded-lg">
-              <Clock className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-yellow-600">
+            <div className="text-center p-6 bg-yellow-50 rounded-lg border border-yellow-200 hover:shadow-md transition-shadow">
+              <Clock className="w-10 h-10 text-yellow-600 mx-auto mb-3" />
+              <div className="text-3xl font-bold text-yellow-600">
                 {pendingSales}
               </div>
-              <div className="text-sm text-gray-800">Pending</div>
+              <div className="text-sm text-gray-700 font-medium">Pending</div>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <DollarSign className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-purple-600">
+            <div className="text-center p-6 bg-purple-50 rounded-lg border border-purple-200 hover:shadow-md transition-shadow">
+              <DollarSign className="w-10 h-10 text-purple-600 mx-auto mb-3" />
+              <div className="text-3xl font-bold text-purple-600">
                 ${totalRevenue.toLocaleString()}
               </div>
-              <div className="text-sm text-gray-800">Total Revenue</div>
+              <div className="text-sm text-gray-700 font-medium">
+                Total Revenue
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      {/* Sales Records Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader className="bg-white">
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle>Sales Records</CardTitle>
-              <CardDescription>Manage and track sales data</CardDescription>
+              <CardTitle className="text-2xl text-gray-900">
+                Sales Records
+              </CardTitle>
+              <CardDescription className="text-gray-600">
+                Manage and track all sales transactions
+              </CardDescription>
             </div>
-            <div className="flex space-x-2">
+            <div className="flex space-x-3">
               <Input
-                placeholder="Search sales..."
+                placeholder="Search by party, invoice, or coil..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64"
+                className="w-80 h-10"
               />
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-40 h-10">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -209,90 +258,144 @@ export default function SalesPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSales.map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell className="font-medium">
-                    {sale.invoice_number}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {sale.customer_name}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {sale.customer_email || "-"}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {sale.customer_phone || "-"}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {sale.sale_date}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    ${sale.final_amount}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        sale.payment_status === "paid"
-                          ? "bg-green-100 text-green-800"
-                          : sale.payment_status === "pending"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : sale.payment_status === "overdue"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-blue-100 text-blue-800"
-                      }`}
-                    >
-                      {sale.payment_status.charAt(0).toUpperCase() +
-                        sale.payment_status.slice(1)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Link href={`/sales/view/${sale.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Link href={`/sales/edit/${sale.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="cursor-pointer"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-gray-50">
+                <TableRow>
+                  <TableHead className="font-semibold text-gray-900">
+                    Invoice
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Party Name
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Coil Name
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Email
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Phone
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Date
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Quantity
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Unit Price
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Final Amount
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Status
+                  </TableHead>
+                  <TableHead className="font-semibold text-gray-900">
+                    Actions
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredSales.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={11}
+                      className="text-center py-8 text-gray-500"
+                    >
+                      {loading ? "Loading..." : "No sales records found"}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredSales.map((sale) => (
+                    <TableRow
+                      key={sale.id}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <TableCell className="font-medium text-gray-900">
+                        {sale.invoice_number || "N/A"}
+                      </TableCell>
+                      <TableCell className="text-gray-900 font-medium">
+                        {sale.party_name}
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        <div className="flex items-center">
+                          <Package className="w-4 h-4 mr-2 text-blue-600" />
+                          {sale.coil_name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        {sale.customer_email || "-"}
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        {sale.customer_phone || "-"}
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        {new Date(sale.sale_date).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        {sale.quantity} {sale.unit}
+                      </TableCell>
+                      <TableCell className="text-gray-900">
+                        ${sale.unit_price.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-gray-900 font-semibold">
+                        ${sale.final_amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                            sale.payment_status === "paid"
+                              ? "bg-green-100 text-green-800"
+                              : sale.payment_status === "pending"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : sale.payment_status === "overdue"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          {sale.payment_status.charAt(0).toUpperCase() +
+                            sale.payment_status.slice(1)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Link href={`/sales/view/${sale.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="cursor-pointer hover:bg-blue-50"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Link href={`/sales/edit/${sale.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="cursor-pointer hover:bg-blue-50"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(sale.id)}
+                            className="cursor-pointer hover:bg-red-50 text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

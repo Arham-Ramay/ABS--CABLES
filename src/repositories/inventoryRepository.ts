@@ -8,7 +8,7 @@ export class InventoryRepository {
     const { data, error } = await supabase
       .from(TABLES.INVENTORY)
       .select("*")
-      .order("product_name", { ascending: true });
+      .order("name", { ascending: true });
 
     if (error) throw error;
     return data || [];
@@ -66,27 +66,13 @@ export class InventoryRepository {
     if (error) throw error;
   }
 
-  // Get inventory by product code
-  static async getByProductCode(
-    productCode: string
-  ): Promise<Inventory | null> {
-    const { data, error } = await supabase
-      .from(TABLES.INVENTORY)
-      .select("*")
-      .eq("product_code", productCode)
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
   // Get inventory by category
   static async getByCategory(category: string): Promise<Inventory[]> {
     const { data, error } = await supabase
       .from(TABLES.INVENTORY)
       .select("*")
       .eq("category", category)
-      .order("product_name", { ascending: true });
+      .order("name", { ascending: true });
 
     if (error) throw error;
     return data || [];
@@ -97,8 +83,8 @@ export class InventoryRepository {
     const { data, error } = await supabase
       .from(TABLES.INVENTORY)
       .select("*")
-      .lte("current_stock", "min_stock_level")
-      .order("current_stock", { ascending: true });
+      .lte("quantity", "min_stock_level")
+      .order("quantity", { ascending: true });
 
     if (error) throw error;
     return data || [];
@@ -116,10 +102,10 @@ export class InventoryRepository {
     let newStock: number;
     switch (operation) {
       case "add":
-        newStock = item.current_stock + quantity;
+        newStock = item.quantity + quantity;
         break;
       case "subtract":
-        newStock = Math.max(0, item.current_stock - quantity);
+        newStock = Math.max(0, item.quantity - quantity);
         break;
       case "set":
         newStock = quantity;
@@ -129,7 +115,7 @@ export class InventoryRepository {
     }
 
     return this.update(id, {
-      current_stock: newStock,
+      quantity: newStock,
     });
   }
 
@@ -139,9 +125,9 @@ export class InventoryRepository {
       .from(TABLES.INVENTORY)
       .select("*")
       .or(
-        `product_name.ilike.%${query}%,product_code.ilike.%${query}%,description.ilike.%${query}%,supplier.ilike.%${query}%`
+        `name.ilike.%${query}%,description.ilike.%${query}%,supplier.ilike.%${query}%,location.ilike.%${query}%`
       )
-      .order("product_name", { ascending: true });
+      .order("name", { ascending: true });
 
     if (error) throw error;
     return data || [];
@@ -151,20 +137,17 @@ export class InventoryRepository {
   static async getStats() {
     const { data, error } = await supabase
       .from(TABLES.INVENTORY)
-      .select("current_stock, min_stock_level, unit_price, status");
+      .select("quantity, min_stock_level, unit_price, status");
 
     if (error) throw error;
 
     const totalValue =
-      data?.reduce(
-        (sum, item) => sum + item.current_stock * item.unit_price,
-        0
-      ) || 0;
+      data?.reduce((sum, item) => sum + item.quantity * item.unit_price, 0) ||
+      0;
     const lowStockCount =
-      data?.filter((item) => item.current_stock <= item.min_stock_level)
-        .length || 0;
+      data?.filter((item) => item.quantity <= item.min_stock_level).length || 0;
     const outOfStockCount =
-      data?.filter((item) => item.current_stock === 0).length || 0;
+      data?.filter((item) => item.quantity === 0).length || 0;
 
     return {
       totalItems: data?.length || 0,

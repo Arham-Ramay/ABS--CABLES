@@ -165,20 +165,7 @@ export default function LoginPage() {
             </form>
 
             {/* Demo Accounts */}
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm font-semibold text-blue-900 mb-2">
-                Demo Accounts:
-              </p>
-              <div className="space-y-1 text-xs text-blue-700">
-                <p>
-                  <strong>Super Admin:</strong> superadmin@example.com /
-                  password123
-                </p>
-                <p>
-                  <strong>Admin:</strong> admin@example.com / password123
-                </p>
-              </div>
-            </div>
+            
           </CardContent>
         </Card>
 

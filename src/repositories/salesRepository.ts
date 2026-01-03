@@ -16,13 +16,23 @@ export class SalesRepository {
 
   // Get sales order by ID
   static async getById(id: string): Promise<Sale | null> {
+    console.log("Fetching sale with ID:", id);
+    console.log("Using table:", TABLES.SALES_ORDERS);
+
     const { data, error } = await supabase
       .from(TABLES.SALES_ORDERS)
       .select("*")
       .eq("id", id)
       .single();
 
-    if (error) throw error;
+    console.log("Supabase response:", { data, error });
+
+    if (error) {
+      console.error("Supabase error:", error);
+      throw error;
+    }
+
+    console.log("Returning data:", data);
     return data;
   }
 
@@ -80,7 +90,7 @@ export class SalesRepository {
     const { data, error } = await supabase
       .from(TABLES.SALES_ORDERS)
       .select("*")
-      .eq("customer_name", customerName)
+      .eq("party_name", customerName)
       .order("sale_date", { ascending: false });
 
     if (error) throw error;
@@ -129,7 +139,7 @@ export class SalesRepository {
       .from(TABLES.SALES_ORDERS)
       .select("*")
       .or(
-        `invoice_number.ilike.%${query}%,customer_name.ilike.%${query}%,customer_email.ilike.%${query}%`
+        `invoice_number.ilike.%${query}%,party_name.ilike.%${query}%,customer_email.ilike.%${query}%,coil_name.ilike.%${query}%`
       )
       .order("sale_date", { ascending: false });
 

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useInventory } from "@/hooks/useInventory";
+import { Inventory } from "@/types";
 import {
   Card,
   CardContent,
@@ -34,70 +36,41 @@ import {
   Package,
   AlertTriangle,
   CheckCircle,
-  Warehouse,
   DollarSign,
+  XCircle,
+  Clock,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 
-// Mock data for inventory
-const mockInventory = [
-  {
-    id: "1",
-    product_name: "Copper Cable 10mm",
-    sku: "CC-001",
-    current_stock: 150,
-    min_threshold: 50,
-    max_threshold: 500,
-    warehouse_location: "Warehouse A",
-    last_updated: "2024-01-15",
-    unit_price: 25.5,
-    total_value: 3825,
-  },
-  {
-    id: "2",
-    product_name: "Fiber Optic Cable",
-    sku: "FO-002",
-    current_stock: 25,
-    min_threshold: 30,
-    max_threshold: 200,
-    warehouse_location: "Warehouse B",
-    last_updated: "2024-01-14",
-    unit_price: 45.0,
-    total_value: 1125,
-  },
-  {
-    id: "3",
-    product_name: "Ethernet Cable CAT6",
-    sku: "EC-003",
-    current_stock: 200,
-    min_threshold: 75,
-    max_threshold: 400,
-    warehouse_location: "Warehouse A",
-    last_updated: "2024-01-15",
-    unit_price: 12.75,
-    total_value: 2550,
-  },
-];
-
 export default function InventoryPage() {
-  const [inventory] = useState(mockInventory);
+  const { inventoryItems, loading, error, deleteInventoryItem } =
+    useInventory();
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredInventory = inventory.filter((item) => {
+  const filteredInventory = inventoryItems.filter((item) => {
     const matchesSearch =
       searchTerm === "" ||
-      item.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase());
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.supplier?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
       filterStatus === "all" ||
-      (filterStatus === "low" && item.current_stock <= item.min_threshold) ||
+      (filterStatus === "low" &&
+        item.quantity <= item.min_stock_level &&
+        item.status !== "out_of_stock") ||
       (filterStatus === "normal" &&
-        item.current_stock > item.min_threshold &&
-        item.current_stock < item.max_threshold) ||
+        item.quantity > item.min_stock_level &&
+        item.quantity < item.min_stock_level * 2) ||
       (filterStatus === "overstock" &&
-        item.current_stock >= item.max_threshold);
+        item.quantity >= item.min_stock_level * 2) ||
+      (filterStatus === "out_of_stock" && item.status === "out_of_stock") ||
+      (filterStatus === "available" && item.status === "available") ||
+      (filterStatus === "reserved" && item.status === "reserved") ||
+      (filterStatus === "damaged" && item.status === "damaged");
 
     return matchesSearch && matchesStatus;
   });
@@ -105,24 +78,30 @@ export default function InventoryPage() {
   const exportCSV = () => {
     const csvData = [
       [
-        "Product",
-        "SKU",
-        "Stock",
-        "Min Threshold",
-        "Max Threshold",
+        "Name",
+        "Category",
+        "Quantity",
+        "Unit",
+        "Min Stock Level",
         "Location",
+        "Status",
+        "Supplier",
         "Unit Price",
         "Total Value",
+        "Purchase Date",
       ],
       ...filteredInventory.map((item) => [
-        item.product_name,
-        item.sku,
-        item.current_stock.toString(),
-        item.min_threshold.toString(),
-        item.max_threshold.toString(),
-        item.warehouse_location,
+        item.name,
+        item.category,
+        item.quantity.toString(),
+        item.unit,
+        item.min_stock_level.toString(),
+        item.location || "",
+        item.status,
+        item.supplier || "",
         item.unit_price.toString(),
-        item.total_value.toString(),
+        (item.quantity * item.unit_price).toString(),
+        item.purchase_date || "",
       ]),
     ];
 
@@ -137,18 +116,101 @@ export default function InventoryPage() {
 
   const totalItems = filteredInventory.length;
   const lowStockItems = filteredInventory.filter(
-    (item) => item.current_stock <= item.min_threshold
+    (item) =>
+      item.quantity <= item.min_stock_level && item.status !== "out_of_stock"
   ).length;
   const totalStockValue = filteredInventory.reduce(
-    (sum, item) => sum + item.total_value,
+    (sum, item) => sum + item.quantity * item.unit_price,
     0
   );
 
-  const getStockStatus = (item: (typeof mockInventory)[0]) => {
-    if (item.current_stock <= item.min_threshold) return "low";
-    if (item.current_stock >= item.max_threshold) return "overstock";
+  const getStockStatus = (item: Inventory) => {
+    if (item.status === "out_of_stock") return "out_of_stock";
+    if (item.status === "damaged") return "damaged";
+    if (item.status === "reserved") return "reserved";
+    if (item.quantity <= item.min_stock_level) return "low";
+    if (item.quantity >= item.min_stock_level * 2) return "overstock";
     return "normal";
   };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "available":
+        return <CheckCircle className="w-3 h-3 mr-1" />;
+      case "out_of_stock":
+        return <XCircle className="w-3 h-3 mr-1" />;
+      case "reserved":
+        return <Clock className="w-3 h-3 mr-1" />;
+      case "damaged":
+        return <AlertTriangle className="w-3 h-3 mr-1" />;
+      default:
+        return <CheckCircle className="w-3 h-3 mr-1" />;
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "copper":
+        return "bg-orange-100 text-orange-800";
+      case "pvc":
+        return "bg-blue-100 text-blue-800";
+      case "packing_boxes":
+        return "bg-brown-100 text-brown-800";
+      case "scrap":
+        return "bg-gray-100 text-gray-800";
+      case "stamps":
+        return "bg-purple-100 text-purple-800";
+      case "coils":
+        return "bg-indigo-100 text-indigo-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Are you sure you want to delete this inventory item?")) {
+      try {
+        await deleteInventoryItem(id);
+        alert("Inventory item deleted successfully!");
+      } catch (error) {
+        console.error("Failed to delete inventory item:", error);
+        alert("Failed to delete inventory item. Please try again.");
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="container mx-auto max-w-7xl">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="container mx-auto max-w-7xl">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h3 className="text-red-800 font-semibold">
+              Error Loading Inventory
+            </h3>
+            <p className="text-red-600">{error}</p>
+            <Button
+              onClick={() => window.location.reload()}
+              className="mt-4 bg-red-600 hover:bg-red-700 text-white"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -228,6 +290,10 @@ export default function InventoryPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="available">Available</SelectItem>
+                  <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                  <SelectItem value="reserved">Reserved</SelectItem>
+                  <SelectItem value="damaged">Damaged</SelectItem>
                   <SelectItem value="low">Low Stock</SelectItem>
                   <SelectItem value="normal">Normal</SelectItem>
                   <SelectItem value="overstock">Overstock</SelectItem>
@@ -237,98 +303,170 @@ export default function InventoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead>Current Stock</TableHead>
-                <TableHead>Min/Max</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Unit Price</TableHead>
-                <TableHead>Total Value</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInventory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    {item.product_name}
-                  </TableCell>
-                  <TableCell className="text-gray-900">{item.sku}</TableCell>
-                  <TableCell className="text-gray-900">
-                    {item.current_stock}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {item.min_threshold}/{item.max_threshold}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    {item.warehouse_location}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    ${item.unit_price}
-                  </TableCell>
-                  <TableCell className="text-gray-900">
-                    ${item.total_value}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        getStockStatus(item) === "low"
-                          ? "bg-red-100 text-red-800"
-                          : getStockStatus(item) === "overstock"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-green-100 text-green-800"
-                      }`}
-                    >
-                      {getStockStatus(item) === "low" && (
-                        <AlertTriangle className="w-3 h-3 mr-1" />
-                      )}
-                      {getStockStatus(item) === "normal" && (
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                      )}
-                      {getStockStatus(item) === "overstock" && (
-                        <Package className="w-3 h-3 mr-1" />
-                      )}
-                      {getStockStatus(item).charAt(0).toUpperCase() +
-                        getStockStatus(item).slice(1)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Link href={`/inventory/view/${item.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Link href={`/inventory/edit/${item.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="cursor-pointer"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {filteredInventory.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-600 mb-2">
+                No inventory items found
+              </h3>
+              <p className="text-gray-500 mb-4">
+                {searchTerm || filterStatus !== "all"
+                  ? "Try adjusting your filters or search query"
+                  : "Get started by adding your first inventory item"}
+              </p>
+              <Link href="/inventory/create">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add First Item
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Min Stock</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Unit Price</TableHead>
+                  <TableHead>Total Value</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredInventory.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {item.name}
+                        </div>
+                        {item.description && (
+                          <div className="text-sm text-gray-500 truncate max-w-xs">
+                            {item.description}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(
+                          item.category
+                        )}`}
+                      >
+                        {item.category.replace("_", " ").toUpperCase()}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-gray-900">
+                      <div className="text-sm">
+                        <div
+                          className={`font-medium ${
+                            item.quantity <= item.min_stock_level
+                              ? "text-orange-600"
+                              : "text-gray-900"
+                          }`}
+                        >
+                          {item.quantity} {item.unit}
+                        </div>
+                        {item.quantity <= item.min_stock_level &&
+                          item.status !== "out_of_stock" && (
+                            <div className="text-xs text-orange-500">
+                              Low stock
+                            </div>
+                          )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-gray-900">
+                      {item.min_stock_level} {item.unit}
+                    </TableCell>
+                    <TableCell className="text-gray-900">
+                      {item.location || "-"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(item.status)}
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            getStockStatus(item) === "low"
+                              ? "bg-red-100 text-red-800"
+                              : getStockStatus(item) === "overstock"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : getStockStatus(item) === "out_of_stock"
+                              ? "bg-red-100 text-red-800"
+                              : getStockStatus(item) === "damaged"
+                              ? "bg-orange-100 text-orange-800"
+                              : getStockStatus(item) === "reserved"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-green-100 text-green-800"
+                          }`}
+                        >
+                          {getStockStatus(item) === "low" && (
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                          )}
+                          {getStockStatus(item) === "normal" && (
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                          )}
+                          {getStockStatus(item) === "overstock" && (
+                            <Package className="w-3 h-3 mr-1" />
+                          )}
+                          {getStockStatus(item) === "out_of_stock" && (
+                            <XCircle className="w-3 h-3 mr-1" />
+                          )}
+                          {getStockStatus(item) === "damaged" && (
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                          )}
+                          {getStockStatus(item) === "reserved" && (
+                            <Clock className="w-3 h-3 mr-1" />
+                          )}
+                          {getStockStatus(item).charAt(0).toUpperCase() +
+                            getStockStatus(item).slice(1)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-gray-900">
+                      ${item.unit_price.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-gray-900">
+                      ${(item.quantity * item.unit_price).toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Link href={`/inventory/view`}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                        <Link href={`/inventory/edit/${item.id}`}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="cursor-pointer text-red-600 hover:text-red-700"
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

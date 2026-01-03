@@ -19,6 +19,7 @@ export function ProtectedRoute({
   const router = useRouter();
 
   useEffect(() => {
+    // Only check authentication after loading is complete
     if (!isLoading) {
       if (!user) {
         // User not logged in, redirect to login
@@ -42,6 +43,7 @@ export function ProtectedRoute({
     }
   }, [user, isLoading, router, requiredRole]);
 
+  // Show loading spinner while checking authentication
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
@@ -67,10 +69,12 @@ export function ProtectedRoute({
     );
   }
 
+  // If no user after loading, show nothing (will redirect)
   if (!user) {
-    return null; // Will redirect
+    return null;
   }
 
+  // Check role requirements
   if (requiredRole && user.role !== requiredRole) {
     return null; // Will redirect
   }
